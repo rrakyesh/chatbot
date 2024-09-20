@@ -1,56 +1,37 @@
 import streamlit as st
-from openai import OpenAI
+from document_parser import parse_document
+from rule_engine import evaluate_document
+from model_integration import run_llm
 
-# Show title and description.
-st.title("💬 Chatbot")
-st.write(
-    "This is a simple chatbot that uses OpenAI's GPT-3.5 model to generate responses. "
-    "To use this app, you need to provide an OpenAI API key, which you can get [here](https://platform.openai.com/account/api-keys). "
-    "You can also learn how to build this app step by step by [following our tutorial](https://docs.streamlit.io/develop/tutorials/llms/build-conversational-apps)."
-)
+# Streamlit app title
+st.title("Document Rule Evaluation App")
 
-# Ask user for their OpenAI API key via `st.text_input`.
-# Alternatively, you can store the API key in `./.streamlit/secrets.toml` and access it
-# via `st.secrets`, see https://docs.streamlit.io/develop/concepts/connections/secrets-management
-openai_api_key = st.text_input("OpenAI API Key", type="password")
-if not openai_api_key:
-    st.info("Please add your OpenAI API key to continue.", icon="🗝️")
-else:
+# Upload document
+uploaded_file = st.file_uploader("Upload a document (PDF or DOCX)", type=["pdf", "docx"])
 
-    # Create an OpenAI client.
-    client = OpenAI(api_key=openai_api_key)
+# Display input field for rule entry
+rules = st.text_area("Enter rules (one rule per line)", height=200)
 
-    # Create a session state variable to store the chat messages. This ensures that the
-    # messages persist across reruns.
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
+if uploaded_file and rules:
+    # Parse the document
+    document_content = uploaded_file.read()
+    parsed_text = parse_document(document_content)
+    
+    # Split rules into a list
+    rule_list = rules.splitlines()
 
-    # Display the existing chat messages via `st.chat_message`.
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+    # Display the parsed document
+    st.subheader("Parsed Document:")
+    st.write(parsed_text)
 
-    # Create a chat input field to allow the user to enter a message. This will display
-    # automatically at the bottom of the page.
-    if prompt := st.chat_input("What is up?"):
+    # Perform rule evaluation
+    if st.button("Evaluate Document"):
+        result = evaluate_document(parsed_text, rule_list)
+        st.subheader("Evaluation Results:")
+        st.write(result)
 
-        # Store and display the current prompt.
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
-
-        # Generate a response using the OpenAI API.
-        stream = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": m["role"], "content": m["content"]}
-                for m in st.session_state.messages
-            ],
-            stream=True,
-        )
-
-        # Stream the response to the chat using `st.write_stream`, then store it in 
-        # session state.
-        with st.chat_message("assistant"):
-            response = st.write_stream(stream)
-        st.session_state.messages.append({"role": "assistant", "content": response})
+        # (Optional) Call LLM for advanced analysis (if needed)
+        if st.checkbox("Run LLM for advanced analysis"):
+            llm_results = run_llm(parsed_text, rules)
+            st.subheader("LLM Results:")
+            st.write(llm_results)
